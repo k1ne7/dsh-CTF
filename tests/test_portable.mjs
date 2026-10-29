@@ -5,6 +5,8 @@ import { definition } from '../plugins/preset.mjs';
 test('runtime resolves shipped assets without local configuration', () => {
   const p = definition();
   assert.equal(p.id, 'k1ne-ctf');
+  assert.equal(p.name, 'CTF');
+  assert.equal(fs.readdirSync(new URL('../skills/', import.meta.url)).length, 1);
   const skills = p.plugins.find(x => x.id === 'skill-filesystem').config.customSkillDirs[0];
   assert.ok(fs.existsSync(skills));
   assert.ok(p.plugins.find(x => x.id === 'ctf-fast-tools').name.startsWith('file:'));
