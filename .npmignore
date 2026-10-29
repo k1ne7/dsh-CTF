@@ -1,0 +1,7 @@
+artifacts/
+analysis/
+tests/
+__pycache__/
+*.pyc
+.ruff_cache/
+*.tgz

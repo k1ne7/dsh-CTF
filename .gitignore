@@ -1,0 +1,10 @@
+artifacts/
+analysis/
+__pycache__/
+*.pyc
+.ruff_cache/
+node_modules/
+.ctf-fast/
+.k1ne-ctf/
+.env
+*.tgz
