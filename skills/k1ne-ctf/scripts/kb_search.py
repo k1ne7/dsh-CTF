@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import os
+import sys
 from pathlib import Path
 
 DEFAULT_ROOT = Path(os.environ.get("DSH_CTF_KB", str(Path(__file__).resolve().parents[3] / "vendor/ctf-knowledge")))

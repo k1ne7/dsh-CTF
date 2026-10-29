@@ -1,6 +1,6 @@
 // Preset-scoped tool. Nested calls use the HOST execution pipeline, not raw tool bodies.
 import { randomUUID } from 'node:crypto';
-export const REVISION = '0.3.0';
+export const REVISION = '0.6.0';
 
 export function strictPwsh(args) {
   return { ...args, command: "$ErrorActionPreference='Stop'; $global:LASTEXITCODE=0;\n" +

@@ -33,3 +33,26 @@ test('context is bounded and cases remain separate', async () => {
   await s.execute(host(), { case_key: 'new', action: 'list' }, exec('b'));
   assert.equal(s.render({ id: 'b' }), ''); assert.ok(s.render({ id: 'a' }).length < 2100);
 });
+
+test('refuted prerequisites propagate transitively without rewriting dependent verdicts', async () => {
+  const s = new Hypotheses(); await s.execute(host(), args(), exec('a'));
+  await s.execute(host(), { ...args(), id: 'h2', status: 'proposed', depends_on: ['h1'], expected_revision: 1 }, exec('a'));
+  await s.execute(host(), { ...args(), id: 'h3', status: 'proposed', depends_on: ['h2'], expected_revision: 2 }, exec('a'));
+  const v = await s.execute(host(), { case_key: 'fixture', action: 'list' }, exec('a'));
+  assert.deepEqual(v.hypotheses.h3.blocked_by_refuted, ['h1']);
+  assert.equal(v.hypotheses.h3.status, 'proposed');
+  await assert.rejects(s.execute(host(), { ...args(), expected_revision: 3, depends_on: ['h3'] }, exec('a')));
+  assert.equal(s.states.get('fixture').revision, 3);
+});
+test('missing dependencies rejected before snapshot write', async () => {
+  const s = new Hypotheses();
+  await assert.rejects(s.execute(host(), { ...args(), depends_on: ['absent'] }, exec('a')));
+  assert.equal(s.states.size, 0);
+});
+test('summary JSON remains valid and newest evidence is prioritized', async () => {
+  const s = new Hypotheses();
+  for (let i=0; i<12; i++) await s.execute(host(), { ...args(), id: 'h'+i, expected_revision: i, statement: 'x'.repeat(200) }, exec('a'));
+  const text = s.render({ id: 'a' });
+  const summary = JSON.parse(text.slice(text.indexOf('\n')+1));
+  assert.equal(summary.hypotheses[0].id, 'h11'); assert.ok(summary.omitted > 0);
+});

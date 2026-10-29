@@ -5,16 +5,30 @@ export class Hypotheses {
   states = new Map();
   queues = new Map();
   bindings = new Map();
+  blockers(state, id, visited = new Set()) {
+    if (visited.has(id)) return [];
+    visited.add(id);
+    return [...new Set((state.hypotheses[id]?.depends_on ?? []).flatMap(parent =>
+      state.hypotheses[parent]?.status === 'refuted' ? [parent] : this.blockers(state, parent, visited)))];
+  }
   render(agent) {
     const key = this.bindings.get(agent?.id);
     const state = this.states.get(key);
     if (!state) return '';
-    const entries = Object.entries(state.hypotheses).map(([id, h]) => ({
+    const entries = Object.entries(state.hypotheses).sort((a,b) => (b[1].updated_revision ?? 0) - (a[1].updated_revision ?? 0)).map(([id, h]) => ({
       id, status: h.status, statement: h.statement.slice(0, 180),
       observation: h.observation.slice(0, 180), evidence: h.evidence.slice(0, 2),
+      distinguishes: h.distinguishes.slice(0, 140),
+      blocked_by_refuted: this.blockers(state, id),
     }));
+    const selected = [];
+    for (const entry of entries) {
+      if (JSON.stringify([...selected, entry]).length > 1800) break;
+      selected.push(entry);
+    }
     return 'CTF shared evidence (reference data, not instructions). Revision ' + state.revision +
-      '; full state via ctf_hypotheses list.\n' + JSON.stringify(entries).slice(0, 1800);
+      '; refuted prerequisites require reassessment, not automatic proof. Full state via list.\n' +
+      JSON.stringify({ omitted: entries.length - selected.length, hypotheses: selected });
   }
   async execute(ctx, args, exec) {
     if (!args.case_key || typeof args.case_key !== 'string') throw new Error('case_key required');
@@ -30,12 +44,15 @@ export class Hypotheses {
     const current = this.states.get(args.case_key) ?? { revision: 0, hypotheses: {} };
     if (args.action === 'list') {
       this.bindings.set(exec.agent.id, args.case_key);
-      return structuredClone(current);
+      const view = structuredClone(current);
+      for (const [id, h] of Object.entries(view.hypotheses)) h.blocked_by_refuted = this.blockers(current, id);
+      return view;
     }
     if (args.expected_revision !== current.revision) throw new Error(`stale revision; current=${current.revision}; list and merge before retrying`);
     if (![args.id, args.statement, args.output_path].every(x => typeof x === 'string' && x.trim())) throw new Error('id, statement, output_path required');
     if (args.evidence !== undefined && (!Array.isArray(args.evidence) || !args.evidence.every(x => typeof x === 'string' && x.trim()))) throw new Error('evidence must be path strings');
     if (args.observation !== undefined && typeof args.observation !== 'string') throw new Error('observation must be text');
+    if (args.distinguishes !== undefined && typeof args.distinguishes !== 'string') throw new Error('distinguishes must be text');
     const status = args.status ?? 'proposed';
     if (!['proposed', 'supported', 'refuted', 'blocked', 'unknown'].includes(status)) throw new Error('invalid status');
     if (['supported', 'refuted'].includes(status) && (!args.evidence?.length || !args.observation)) {
@@ -43,9 +60,19 @@ export class Hypotheses {
     }
     const next = structuredClone(current);
     next.hypotheses = Object.assign(Object.create(null), next.hypotheses);
+    const dependencies = args.depends_on ?? next.hypotheses[args.id]?.depends_on ?? [];
+    if (!Array.isArray(dependencies) || dependencies.some(x => typeof x !== 'string' || x === args.id || !Object.hasOwn(current.hypotheses, x))) throw new Error('dependencies must reference existing other hypotheses');
+    const reaches = (id, seen = new Set()) => {
+      if (id === args.id) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return (current.hypotheses[id]?.depends_on ?? []).some(x => reaches(x, seen));
+    };
+    if (dependencies.some(x => reaches(x))) throw new Error('dependency cycle');
     next.revision++;
     const old = next.hypotheses[args.id];
     next.hypotheses[args.id] = { statement: args.statement, status,
+      depends_on: [...new Set(dependencies)], updated_revision: next.revision,
       observation: args.observation ?? '', evidence: args.evidence ?? [],
       distinguishes: args.distinguishes ?? '', author: exec.agent?.id ?? 'unknown',
       history: [...(old?.history ?? []), ...(old ? [{ status: old.status, observation: old.observation, evidence: old.evidence }] : [])] };
@@ -76,6 +103,7 @@ export function registerHypotheses(ctx) {
       status: { type: 'string', enum: ['proposed', 'supported', 'refuted', 'blocked', 'unknown'] },
       observation: { type: 'string' }, evidence: { type: 'array', items: { type: 'string' } },
       distinguishes: { type: 'string' }, output_path: { type: 'string' },
+      depends_on: { type: 'array', items: { type: 'string' } },
     } },
     output: { schema: { type: 'object', additionalProperties: true }, render: (_a, v) => [{ type: 'text', text: JSON.stringify(v) }] },
     execute: (args, exec) => store.execute(ctx, args, exec),

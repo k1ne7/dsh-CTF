@@ -2,9 +2,9 @@
 
 # dsh-CTF
 
-### k1ne’s CTF模式 · 为 DeepSeek Harness 提供证据驱动的 CTF 协作
+### CTF · 为 DeepSeek Harness 提供证据驱动的 CTF 协作
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0-blue)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![CI](https://github.com/k1ne7/dsh-CTF/actions/workflows/ci.yml/badge.svg)](https://github.com/k1ne7/dsh-CTF/actions/workflows/ci.yml)
 
@@ -16,8 +16,8 @@
 
 ## 简介
 
-这是 DSH 的独立插件 bundle，不是另一个 Agent 框架，也不需要部署灵枢。安装后新增
-**k1ne's CTF模式**，保留原有模式、模型配置与执行权限。
+dsh-CTF 是面向 DeepSeek Harness 的 CTF 解题插件，提供 **CTF 模式**、原生多 Agent 协作、
+批量工具执行、共享假设与证据摘要，以及按需检索的离线知识库。
 
 目标是减少重复探索、工具往返和多 Agent 之间的信息损失，让有效推理用于解题。
 不承诺固定两分钟解题，也不把更多 Agent 数量等同于更高成功率。
@@ -56,8 +56,8 @@ dsh plugin --profile web add github:k1ne7/dsh-CTF
 
 ## 使用
 
-1. 新建会话，选择 **k1ne's CTF模式**，工作目录选在题目目录。
-2. 开场核对 `K1NE_CTF_PRESET=0.3.0`，工具列表有 `ctf_batch` 与 `ctf_hypotheses`。
+1. 新建会话，选择 **CTF**，工作目录选在题目目录。
+2. 开场核对 `K1NE_CTF_PRESET=0.6.0`，工具列表有 `ctf_batch` 与 `ctf_hypotheses`。
 3. 给出题面、附件/实例、规则和已知事实；不要为提速而编造提示。
 4. Lead 按独立分支选择队友，最多 4 个且服从宿主可用槽位，主 Agent 同时推进。
 
@@ -126,7 +126,7 @@ dsh plugin --profile web remove dsh-ctf
 
 ## 验证与边界
 
-- 发布版：32 项 Python 测试、10 项 Node 测试；实际 DSH bundle 装配与原生工具执行检查通过。
+- 发布版：32 项 Python 测试、20 项 Node 测试；实际 DSH bundle 装配与原生工具执行检查通过。
 - 已检查错误停止、宿主 guard、生效指纹、共享证据注入和归档。验证未调用真实付费模型。
 - Windows 已实测；Linux 由 CI 检查 Python/Node 测试，完整 Linux/macOS DSH 运行未实测。
 - 旧预设安装器专用测试已由可移动包入口测试替换，旧本机安装/构建脚本不参与发布。
@@ -143,7 +143,23 @@ npm test
 - **[Dest1ny-Sec/Des-CTF-Knowledge](https://github.com/Dest1ny-Sec/Des-CTF-Knowledge)**：感谢 **Dest1ny** 以及知识文章、历届 WriteUp、脚本的原作者与贡献者。本项目随包保留用户提供知识库的精选离线快照（专题文章、分段索引与工具手册；完整 WP/脚本见上游）与原始 README/LICENSE。
 - **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)**：提供原生 Agent、工具、Skill 与 Team 机制；基础组合参考官方 standard preset。
 - **[fb0sh/dsh-pentester](https://github.com/fb0sh/dsh-pentester)**：参考精简运行状态注入的架构思路，未复制其运行时代码或 Skill Pack。
-- **[FLIAZ/SpiritScout](https://github.com/FLIAZ/SpiritScout)**：项目迭代中的解题编排与证据管理经验参考。
 
 本项目原创代码 MIT。第三方知识的整体整理与单篇文章/脚本可能适用不同作者和许可，
 不统一重新授权第三方内容。详见 [第三方声明](THIRD_PARTY_NOTICES.md) 和保留的原始许可证。
+
+## 0.6.0：流程调整（效果待评估）
+
+- 模式显示名为 **CTF**；内部 id 仍为 `k1ne-ctf`，保留会话引用兼容。
+- 按独立工作量选择 **0–4 个队友**，不强制开场分工；主 Agent 可直接推进。
+- 只保留 **k1ne-ctf 一个通用 Skill**；漏洞/POP 方法为按需参考，不默认加载。
+- 默认工具面不注册建图工具；`plugins/chain.mjs` 仅为保留的实验代码。
+- 假设支持 `depends_on`，前提被反驳时显示受影响分支；保留依赖验证与历史。
+- 摘要按最新更新排序，以完整 JSON 条目组成，并显示省略数量。
+- `tools/result` 观察器仅在失败或相同参数重复调用时注入简短反馈；正常成功不增加该反馈上下文。
+
+观察器保存最近 64 条元数据作比较，不是解题回合限制；不输出原始参数、不拦截必要轮询、
+不自动重试，也不推断目标状态一定未变。它不依赖模型先调用“检查进度”工具。
+
+**功能测试通过不等于提速得到证明。** 当前缺少固定模型/参数、干净环境、多题重复的对照评测，
+且已有单题回归现象。本版作为候选流程调整提交审查，不宣称全面快于原生模式或提高难题解出率。
+原有 v0.3.0 Release 保留，可作为基线；PR 合并与 Release 发布是独立操作。

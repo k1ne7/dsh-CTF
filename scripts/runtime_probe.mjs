@@ -15,6 +15,7 @@ export default class RuntimeProbe {
         await ctx.loader.await();
         const roster = await ctx.agentPresets.list();
         result.preset = roster.find(x => x.id === 'k1ne-ctf');
+        if (result.preset?.name !== 'CTF') throw new Error('Display name must be CTF');
         if (!result.preset || result.preset.broken) {
           result.inventory = (await ctx.agentPresets.compositionInventory()).find(x => x.id === 'k1ne-ctf');
           throw new Error(JSON.stringify(result.preset ?? roster));
@@ -35,19 +36,17 @@ export default class RuntimeProbe {
           agent: handle.agent, session: handle.agent.session,
           provider: 'deepseek-official', model: 'deepseek-flash' });
         result.sections = assembly.sections.map(x => ({ name: x.name, chars: x.text.length }));
-        result.personaPresent = assembly.sections.some(x => x.text.includes("You are k1ne's CTF solver"));
+        result.personaPresent = assembly.sections.some(x => x.text.includes("You are a CTF solving agent"));
         if (!result.personaPresent) throw new Error('Persona missing from actual assembly');
         const persona = assembly.sections.find(x => x.name === 'deployment:persona-prefix')?.text ?? '';
-        result.startupDelegationPresent = persona.includes('actively start an appropriate number') &&
-          persona.includes('maximum of 4 subagents') && persona.includes('not a fixed one or always four');
-        result.knowledgeHelperResolved = persona.includes('/kb_search.py') && !persona.includes('__KB_SCRIPT__');
-        result.revisionPresent = persona.includes('K1NE_CTF_PRESET=0.3.0');
-        if (!result.startupDelegationPresent || !result.knowledgeHelperResolved) {
-          throw new Error('Startup delegation or local knowledge helper missing');
-        }
+        result.adaptiveDelegation = persona.includes('zero to four') && !persona.includes('must actively start');
+        result.revisionPresent = persona.includes('K1NE_CTF_PRESET=0.6.0');
+        if (!result.adaptiveDelegation) throw new Error('Adaptive flow missing');
         const skill = await ctx.skills.get('k1ne-ctf', { scope: handle.agent, cwd: root });
         result.skill = skill ? { name: skill.name, path: skill.path, resourceBase: skill.resourceBase } : null;
         if (!skill) throw new Error('Skill missing from actual scoped registry');
+        result.singleSkill = !!skill;
+        if (result.tools.includes('ctf_chain')) throw new Error('Graph tool must not be in default surface');
         const controller = new AbortController();
         const callBatch = async (args, suffix) => {
           const response = await ctx.tools.execute({ name: 'ctf_batch', arguments: args,
@@ -96,6 +95,27 @@ export default class RuntimeProbe {
           session: handle.agent.session, provider: 'deepseek-official', model: 'deepseek-flash' });
         result.sharedEvidenceInjected = JSON.stringify(refreshed).includes('runtime counterexample');
         if (!result.sharedEvidenceInjected) throw new Error('Shared state not injected into actual context');
+        const dependent = await ctx.tools.execute({ name: 'ctf_hypotheses', arguments: {
+          case_key: 'local-runtime-fixture', action: 'update', expected_revision: 1,
+          id: 'h2', statement: 'dependent branch', status: 'proposed', depends_on: ['h1'],
+          distinguishes: 'different observable outcomes', output_path: path.join(root, 'artifacts/hypothesis-dependent'),
+        }, agent: handle.agent, signal: controller.signal, callId: 'dependent-probe' });
+        if (dependent.isError) throw new Error(JSON.stringify(dependent.content));
+        const view = await ctx.tools.execute({ name: 'ctf_hypotheses', arguments: {
+          case_key: 'local-runtime-fixture', action: 'list',
+        }, agent: handle.agent, signal: controller.signal, callId: 'dependent-list' });
+        const state = view.value ?? JSON.parse(view.content.find(x => x.type === 'text').text);
+        result.dependenciesVerified = state.hypotheses.h2.status === 'proposed' &&
+          state.hypotheses.h2.blocked_by_refuted.includes('h1');
+        if (!result.dependenciesVerified) throw new Error('Dependency propagation failed');
+        const feedbackCall = await ctx.tools.execute({ name: 'read', arguments: {
+          file_path: path.join(root, 'artifacts/feedback-intentionally-missing.txt') }, agent: handle.agent,
+          signal: controller.signal, callId: 'feedback-probe' });
+        if (!feedbackCall.isError) throw new Error('Missing fixture unexpectedly readable');
+        const feedbackAssembly = await ctx.systemPrompt.assemble({ scope: handle.agent, agent: handle.agent,
+          session: handle.agent.session, provider: 'deepseek-official', model: 'deepseek-flash' });
+        result.executionFeedbackInjected = JSON.stringify(feedbackAssembly).includes('Execution feedback (observations');
+        if (!result.executionFeedbackInjected) throw new Error('Native feedback hook did not run');
         result.compositions = ctx.agentPresets.inspectCompositions(handle.agent.ctx).map(x => ({
           id: x.id, leakedServices: x.leakedServices,
         }));

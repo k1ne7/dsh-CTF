@@ -1,9 +1,9 @@
 {
   "name": "dsh-ctf",
-  "version": "0.3.0",
+  "version": "0.6.0",
   "private": false,
   "type": "module",
-  "description": "k1ne's CTF模式：证据驱动解题与 DSH 原生 Agent Teams 协作",
+  "description": "CTF 模式：DeepSeek Harness 原生协作、证据状态与执行反馈",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
@@ -28,7 +28,7 @@
     }
   },
   "scripts": {
-    "test": "python -m unittest discover -s tests -v && node --test tests/test_batch.mjs tests/test_hypotheses.mjs tests/test_portable.mjs",
+    "test": "python -m unittest discover -s tests -v && node --test tests/test_batch.mjs tests/test_hypotheses.mjs tests/test_portable.mjs tests/test_chain.mjs tests/test_feedback.mjs",
     "test:portable": "node --test tests/test_portable.mjs"
   },
   "license": "MIT",

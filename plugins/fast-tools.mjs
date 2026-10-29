@@ -1,10 +1,12 @@
 import { executeBatch, REVISION } from './batch-core.mjs';
 import { registerHypotheses } from './hypotheses.mjs';
+import { registerExecutionFeedback } from './execution-feedback.mjs';
 
 export default class FastTools {
   static inject = ['tools', 'systemPrompt'];
   constructor(ctx) {
     registerHypotheses(ctx);
+    registerExecutionFeedback(ctx);
     ctx.tools.register({
       name: 'ctf_batch',
       description: `k1ne CTF ${REVISION}: execute several known native tool calls in ONE model turn; writes full results to output_path and returns short previews. All nested calls keep host approvals/sandbox. Use parallel_reads only for independent host-declared safe reads; writes/shell are serial. pwsh uses terminating errors and propagates the final native exit code. Stops after an error by default; inspect archive before retrying side effects.`,
