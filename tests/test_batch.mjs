@@ -1,5 +1,26 @@
 import test from 'node:test';
+import { previewText } from '../plugins/batch-core.mjs';
 import assert from 'node:assert/strict';
+
+test('ordinary evidence beyond the old 900-character cutoff remains visible', () => {
+  const text = 'x'.repeat(1000) + 'critical observation';
+  assert.deepEqual(previewText([{ type: 'text', text }]), { preview: text, total_chars: text.length, truncated: false });
+});
+test('large evidence reports omission and retains both ends', () => {
+  const text = 'HEAD' + 'x'.repeat(20000) + 'TAIL';
+  const p = previewText([{ type: 'text', text }]);
+  assert.equal(p.truncated, true);
+  assert.equal(p.total_chars, text.length);
+  assert.ok(p.preview.startsWith('HEAD'));
+  assert.ok(p.preview.endsWith('TAIL'));
+  assert.ok(p.preview.includes('read full archive'));
+});
+test('batch summary divides evidence budget across results', async () => {
+  const ctx = { tools: { executionMode: () => ({kind:'serial'}), execute: async () => ({content:[{type:'text',text:'x'.repeat(15000)}]}) } };
+  const p = await executeBatch(ctx, {steps:[{tool:'read',args:{}},{tool:'read',args:{}}],output_path:'test'}, execution());
+  assert.ok(p.results.every(x => x.truncated && x.total_chars === 15000));
+  assert.ok(p.results.reduce((n,x) => n + x.preview.length,0) < 12500);
+});
 import { executeBatch, strictPwsh } from '../plugins/batch-core.mjs';
 
 function host(fail = false) {

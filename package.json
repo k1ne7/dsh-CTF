@@ -1,9 +1,9 @@
 {
   "name": "dsh-ctf",
-  "version": "0.6.0",
+  "version": "0.7.3",
   "private": false,
   "type": "module",
-  "description": "CTF 模式：DeepSeek Harness 原生协作、证据状态与执行反馈",
+  "description": "CTF 模式：原生协作、完整证据与停滞反馈",
   "main": "./index.js",
   "exports": {
     ".": "./index.js",
@@ -20,7 +20,9 @@
     "README.md",
     "LICENSE",
     "THIRD_PARTY_NOTICES.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "scripts/ctf_eval.py",
+    "docs/v0.7-design.md"
   ],
   "dsh": {
     "bundle": {
