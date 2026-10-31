@@ -27,6 +27,8 @@ export default class RuntimeProbe {
           setup: async agentCtx => { await ctx.agentPresets.mount(agentCtx, 'k1ne-ctf'); },
         });
         result.tools = ctx.tools.schemas(handle.agent).map(x => x.name);
+        result.publicWebDisabled = !result.tools.includes('web_search') && !result.tools.includes('web_fetch');
+        if (process.env.DSH_CTF_PUBLIC_WEB !== '1' && !result.publicWebDisabled) throw new Error('Public web tools still exposed');
         if (!result.tools.includes('ctf_batch')) throw new Error('Native batch tool missing');
         const required = ['spawn_teammate', 'send_message', 'list_agents', 'wait_agent',
           'interrupt_agent', 'team_task_create', 'team_task_list', 'team_task_get', 'team_task_update'];
@@ -40,7 +42,7 @@ export default class RuntimeProbe {
         if (!result.personaPresent) throw new Error('Persona missing from actual assembly');
         const persona = assembly.sections.find(x => x.name === 'deployment:persona-prefix')?.text ?? '';
         result.adaptiveDelegation = persona.includes('zero to four') && !persona.includes('must actively start');
-        result.revisionPresent = persona.includes('K1NE_CTF_PRESET=0.6.0');
+        result.revisionPresent = persona.includes('K1NE_CTF_PRESET=0.7.3');
         if (!result.adaptiveDelegation) throw new Error('Adaptive flow missing');
         const skill = await ctx.skills.get('k1ne-ctf', { scope: handle.agent, cwd: root });
         result.skill = skill ? { name: skill.name, path: skill.path, resourceBase: skill.resourceBase } : null;
@@ -48,6 +50,24 @@ export default class RuntimeProbe {
         result.singleSkill = !!skill;
         if (result.tools.includes('ctf_chain')) throw new Error('Graph tool must not be in default surface');
         const controller = new AbortController();
+        for (const [i, file] of ['package.json', 'persona.md', 'README.md', 'CHANGELOG.md'].entries()) {
+          const response = await ctx.tools.execute({name: 'read', arguments: {file_path: path.join(root, file)},
+            agent: handle.agent, signal: controller.signal, callId: `checkpoint-probe-${i}`});
+          if (response.isError) throw new Error('Delegation checkpoint fixture read failed');
+        }
+        const checkpoint = await ctx.systemPrompt.assemble({scope: handle.agent, agent: handle.agent,
+          session: handle.agent.session, provider: 'deepseek-official', model: 'deepseek-flash'});
+        result.delegationCheckpointInjected = JSON.stringify(checkpoint).includes('CTF coordination checkpoint (Lead instruction');
+        if (!result.delegationCheckpointInjected) throw new Error('Native delegation checkpoint not injected');
+        result.checkpointPreviewSafe = true;
+        for (let i = 0; i < 5; i++) {
+          const preview = await ctx.systemPrompt.assemble({scope: handle.agent, agent: handle.agent,
+            session: handle.agent.session, provider: 'deepseek-official', model: 'deepseek-flash'});
+          if (!JSON.stringify(preview).includes('CTF coordination checkpoint (Lead instruction')) {
+            result.checkpointPreviewSafe = false;
+            throw new Error('Preview assembly consumed delegation checkpoint');
+          }
+        }
         const callBatch = async (args, suffix) => {
           const response = await ctx.tools.execute({ name: 'ctf_batch', arguments: args,
             agent: handle.agent, signal: controller.signal, callId: `batch-probe-${suffix}` });
@@ -116,6 +136,21 @@ export default class RuntimeProbe {
           session: handle.agent.session, provider: 'deepseek-official', model: 'deepseek-flash' });
         result.executionFeedbackInjected = JSON.stringify(feedbackAssembly).includes('Execution feedback (observations');
         if (!result.executionFeedbackInjected) throw new Error('Native feedback hook did not run');
+        // Deterministic host guard fixture: distinct inputs, equal observations.
+        // Avoid requiring shell sandbox ACL changes merely to test observation.
+        const stallPrefix = path.join(root, 'artifacts/stall-fixture-');
+        ctx.tools.guard(execution => execution.name === 'read' &&
+          execution.arguments.file_path?.startsWith(stallPrefix) ? 'CTF_EQUAL_RESULT_FIXTURE' : undefined);
+        for (let i = 0; i < 3; i++) {
+          const observed = await ctx.tools.execute({name: 'read', arguments: {
+            file_path: stallPrefix + i,
+          }, agent: handle.agent, signal: controller.signal, callId: `stall-probe-${i}`});
+          if (!observed.isError) throw new Error('Stall guard fixture did not run');
+        }
+        const stalledAssembly = await ctx.systemPrompt.assemble({scope: handle.agent, agent: handle.agent,
+          session: handle.agent.session, provider: 'deepseek-official', model: 'deepseek-flash'});
+        result.stallFeedbackInjected = JSON.stringify(stalledAssembly).includes('possible_stall\\\":true');
+        if (!result.stallFeedbackInjected) throw new Error('Native equal-output feedback did not run');
         result.compositions = ctx.agentPresets.inspectCompositions(handle.agent.ctx).map(x => ({
           id: x.id, leakedServices: x.leakedServices,
         }));

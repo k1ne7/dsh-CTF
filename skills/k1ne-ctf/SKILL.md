@@ -5,14 +5,14 @@ description: CTF 单题深解与原生多 Agent 协作：区分假设的实验�
 
 # k1ne's CTF 解题方法
 
-## v0.6.0 执行快路径
+## v0.7.3 执行快路径
 
-新会话开场显示 `K1NE_CTF_PRESET=0.6.0`，并确认实际工具列表有 `ctf_batch`。已有会话可能继续持有旧装配。
-已知要做的几个原生工具操作用一次 `ctf_batch` 完成：
+新会话开场显示 `K1NE_CTF_PRESET=0.7.3`，并确认实际工具列表有 `ctf_batch`。已有会话可能继续持有旧装配。
+仅在确有多个已知操作且能减少往返时使用 `ctf_batch`；单个操作直接调用原生工具：
 ```json
 {"steps":[{"tool":"read","args":{"file_path":"源码绝对路径"}},{"tool":"read","args":{"file_path":"配置绝对路径"}}],"output_path":"本题目录/batch-results.json","parallel_reads":true}
 ```
-归档保留完整结果；返回短预览。每个子调用仍经过宿主工具管线；只并行宿主声明安全的只读操作，写入和 shell 串行。
+归档保留完整结果；返回有界预览，`truncated` 表示内容不完整。遗漏处不代表没有线索；先读归档，不要重复请求或仅凭预览排除方向。每个子调用仍经过宿主工具管线；只并行宿主声明安全的只读操作，写入和 shell 串行。
 默认失败后停止后续操作；先看归档再决定重试，避免重复执行已经发生的副作用。PowerShell 采用终止错误并传递最后一个原生命令退出码。
 
 多层引号/中文参数：用 `scripts/ctf_exec.py --workspace "本题目录" --plan "执行计划.json"`，通过宿主 shell 调用。

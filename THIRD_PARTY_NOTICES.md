@@ -16,3 +16,6 @@
 共享运行状态设计参考 fb0sh/dsh-pentester：
 https://github.com/fb0sh/dsh-pentester
 采用设计思路，未复制其运行时代码或 Skill Pack。感谢相关作者。
+
+## v0.7 设计研究
+参考 FLIAZ/SpiritScout 的证据汇聚及 trhhubsd/ARTEX 公开派生仓的任务交接/预算保全设计。感谢相关作者。固定提交与来源见 docs/v0.7-design.md。未复制代码、提示词或 Skill，未引入其运行时。

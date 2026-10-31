@@ -1,6 +1,6 @@
 // Preset-scoped tool. Nested calls use the HOST execution pipeline, not raw tool bodies.
 import { randomUUID } from 'node:crypto';
-export const REVISION = '0.6.0';
+export const REVISION = '0.7.3';
 
 export function strictPwsh(args) {
   return { ...args, command: "$ErrorActionPreference='Stop'; $global:LASTEXITCODE=0;\n" +
@@ -12,6 +12,15 @@ function compact(result) {
   return { is_error: result.isError === true || (typeof code === 'number' && code !== 0),
     exit_code: typeof code === 'number' ? code : null,
     content: result.content ?? [], error: result.error?.message ?? null };
+}
+
+// A preview is not a complete observation. Never silently discard evidence.
+export function previewText(content, budget = 12000) {
+  const text = content.filter(c => c.type === 'text').map(c => c.text).join('\n');
+  const truncated = text.length > budget;
+  return { preview: truncated ? text.slice(0, budget * 3 / 4) +
+    '\n[OMITTED: read full archive before excluding a hypothesis]\n' + text.slice(-budget / 4) : text,
+    total_chars: text.length, truncated };
 }
 
 export async function executeBatch(ctx, args, exec) {
@@ -72,7 +81,7 @@ export async function executeBatch(ctx, args, exec) {
     archive_path: archivePath, archive_error: archive.error,
     results: results.map(x => ({ index: x.index, tool: x.tool, is_error: x.is_error,
       exit_code: x.exit_code, elapsed_ms: x.elapsed_ms,
-      preview: x.content.filter(c => c.type === 'text').map(c => c.text).join('\n').slice(0, 900) })) };
+      ...previewText(x.content, Math.floor(12000 / results.length)) })) };
   return summary;
 }
 
