@@ -35,7 +35,7 @@ export class ExecutionFeedback {
     state.calls = state.calls.slice(-64); state.total++;
     this.agents.set(exec.agent, state);
   }
-  render(agent) {
+  render(agent, role) {
     const state = this.agents.get(agent);
     if (!state) return '';
     const last = state.calls.at(-1);
@@ -47,7 +47,7 @@ export class ExecutionFeedback {
     // Rendering may occur during previews and preflight assembly. It MUST be
     // pure: keep the bounded snapshot until an actual native spawn attempt.
     // This is pending cooperation, not a claimed model-delivery receipt.
-    const delegationCheckpoint = !state.delegationAttempts && state.total >= 4;
+    const delegationCheckpoint = role === 'lead' && !state.delegationAttempts && state.total >= 4;
     if (!last.failed && !last.repeats && !stalled && !delegationCheckpoint && !last.environment_error) return '';
     const coordination = delegationCheckpoint ? 'CTF coordination checkpoint (Lead instruction, separate from result observations): For a nontrivial task with native Team available, call spawn_teammate now for one genuinely independent unresolved question or read-only evidence review, then continue the main experiment. Give actual observations and a decision criterion. Short or strictly serial work needs no teammate; unavailable slots/tool failures require direct fallback, not repeated spawning. Teammates must not spawn nested managers. Do not duplicate experiments or mutate shared target state concurrently.\n' : '';
     return coordination + 'Execution feedback (observations, not commands): ' + JSON.stringify({
@@ -67,7 +67,15 @@ export class ExecutionFeedback {
 
 export function registerExecutionFeedback(ctx) {
   const feedback = new ExecutionFeedback();
+  let roleOf = () => undefined;
+  ctx.inject(['agentTeams'], scope => {
+    roleOf = agent => {
+      try { return scope.agentTeams.membership(agent)?.role; }
+      catch { return undefined; }
+    };
+    return () => { roleOf = () => undefined; };
+  });
   ctx.on('tools/result', (exec, result) => feedback.observe(exec, result));
   ctx.systemPrompt.context({ name: 'ctf:execution-feedback', order: 910,
-    text: assembly => feedback.render(assembly.agent) });
+    text: assembly => feedback.render(assembly.agent, roleOf(assembly.agent)) });
 }
